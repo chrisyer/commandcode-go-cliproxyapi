@@ -48,12 +48,13 @@ Without this plugin, using a CommandCode Go/GOAT/Pro/Max plan in CLIProxyAPI req
   - OpenAI clients get `reasoning_content` backfilled onto each chunk while the vendor fields stay intact.
 - **Capability-aware Reasoning Controls**: an explicit `route-overrides` declaration (or catalog thinking metadata) re-enables eager validation and clamping; with nothing declared, the client's `reasoning_effort` is forwarded verbatim (`auto`/`none` omit the field) and the upstream is the authority.
 - **Dynamic Catalog Discovery**: remote catalog with local fallback, deduplication, and diagnostics for what was excluded.
-- **CommandCode Quota Page**: a Management Center page listing every configured credential with its account email, plan, remaining plan credits, and the rolling 5-hour/weekly windows (used, cap, reset time), refreshed per card on demand.
+- **Native Credential Quota**: the plugin registers a quota provider, so every CommandCode credential shows its plan and 5-hour/weekly/monthly remaining quota inside the panel's own credential list — no plugin page and no panel extension needed, the way built-in codex/antigravity credentials appear.
+- **CommandCode Quota Page**: a standalone Management Center page listing every configured credential with its account email, plan, remaining plan credits, and the rolling 5-hour/weekly windows (used, cap, reset time), refreshed per card on demand. It reads the management key from whichever panel is hosting it and falls back to a one-time prompt.
 - **Multi-Key Auth Scheduling**: one key pool shared across all protocols through CLIProxyAPI's native scheduler.
 
 ## Requirements
 
-- **CLIProxyAPI**: `v7.2.138+`
+- **CLIProxyAPI**: `v7.2.159+` (or any `v8.x`)
 - **Go Toolchain**: Go 1.26+ (CGO enabled for `-buildmode=c-shared`)
 
 ## Build
@@ -135,8 +136,9 @@ plugins:
 | `max-response-bytes` | `int64` | `67108864` | Maximum non-streaming response body size. |
 | `allow-http` | `bool` | `false` | Permit `http://` upstreams for local testing. |
 
-### Quota page
-The `CommandCode Quota` page (Management Center → plugins) reads the account surface on the same authority as `base-url`:
+### Quota
+
+The account surface lives on the same authority as `base-url`:
 
 | Endpoint | Purpose |
 |---|---|
@@ -144,7 +146,11 @@ The `CommandCode Quota` page (Management Center → plugins) reads the account s
 | `GET {authority}/alpha/billing/subscriptions` | Plan id/status |
 | `GET {authority}/alpha/whoami?limits=1` | Account email for the card label |
 
-`{authority}` is derived from `base-url` by trimming its provider path (`/provider/v1`). Each card is refreshed manually and independently; the page never polls, and quota values never influence routing.
+`{authority}` is derived from `base-url` by trimming its provider path (`/provider/v1`).
+
+**Native per-credential quota (recommended).** The plugin advertises a `quota_provider` capability: the panel lists each CommandCode credential with its plan and remaining quota next to the built-in codex/antigravity ones, refreshed from the credential row. Nothing to configure — install the plugin, and `POST /v0/management/plugins/commandcode-go-cliproxyapi/quota` answers per `auth_index`. The normalized response reports **remaining** fractions (`1.0` = untouched), and the raw remaining/purchased credit counts as summary metrics.
+
+**Standalone quota page.** Panels without a plugin-quota view can still use Management Center → plugins → `CommandCode Quota`. The page is panel-agnostic: it recovers the management key from whichever panel's local storage holds it (`enc::v1::` for the official Management Center, `enc::v2::` for CPA-Manager-Plus, scoped `cli-proxy-auth*` entries, or plain JSON), and if none is readable — a panel that keeps the key in memory only, or one on another origin — it asks for the key once and remembers it for that tab. Either way each card is refreshed manually and independently; the page never polls, and quota values never influence routing.
 
 ### Reasoning effort
 

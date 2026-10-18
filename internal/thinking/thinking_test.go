@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 
 	"commandcode-go-cliproxyapi/internal/errclass"
 )
@@ -81,7 +81,7 @@ func TestEffortFromBudgetDisabledBudget(t *testing.T) {
 }
 
 // TestEffortFromBudgetThresholdTable pins the ported host threshold mapping
-// (SDK convert.go @ v7.2.138: <=512 minimal, <=1024 low, <=8192 medium,
+// (SDK convert.go @ v8.0.32: <=512 minimal, <=1024 low, <=8192 medium,
 // <=24576 high, else xhigh) followed by nearest-supported clamping.
 func TestEffortFromBudgetThresholdTable(t *testing.T) {
 	cases := []struct {

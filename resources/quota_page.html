@@ -5,80 +5,239 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CommandCode Quota</title>
 <style>
+/* Design tokens mirror the CLIProxyAPI Management Center (src/styles/themes.scss)
+   so the page reads as part of the panel rather than an embedded stranger.
+   A meter is "remaining", matching the panel's own quota bars: >=70 success,
+   >=30 amber, <30 failure. */
 :root {
-  --bg-primary: #f0eee8;
   --bg-secondary: #faf9f5;
+  --bg-primary: #f0eee8;
   --bg-tertiary: #e9e6df;
+  --bg-hover: var(--bg-tertiary);
   --text-primary: #2d2a26;
   --text-secondary: #6d6760;
   --text-tertiary: #a29c95;
+  --text-quaternary: #c0bab3;
   --border-color: #e3e1db;
+  --border-hover: #cecac4;
   --primary-color: #8b8680;
   --primary-hover: #7f7a74;
-  --success-color: #188038;
-  --warning-color: #b06000;
-  --error-color: #b3261e;
+  --primary-active: #726d67;
+  --viz-success: #10b981;
+  --quota-medium-color: #e0aa14;
+  --warning-color: #c65746;
+  --error-color: #c65746;
+  --danger-color: var(--error-color);
+  --success-badge-bg: #d1fae5;
+  --success-badge-text: #065f46;
+  --failure-badge-bg: rgba(198, 87, 70, 0.14);
+  --failure-badge-text: #8a3a30;
+  --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.08);
   --radius-md: 8px;
-  --shadow: 0 1px 3px rgba(45, 42, 38, .12);
+  --radius-full: 9999px;
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 160ms;
+  --dur-hover: 200ms;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 [data-theme="white"] {
-  --bg-primary: #f0eee8;
-  --bg-secondary: #faf9f5;
-  --bg-tertiary: #e9e6df;
-  --text-primary: #2d2a26;
-  --text-secondary: #6d6760;
-  --text-tertiary: #a29c95;
-  --border-color: #e3e1db;
+  --bg-secondary: #ffffff;
+  --bg-primary: #ffffff;
+  --bg-tertiary: #f6f6f6;
+  --bg-hover: var(--bg-tertiary);
+  --border-color: #e5e5e5;
+  --border-hover: #cccccc;
 }
 [data-theme="dark"] {
-  --bg-primary: #1d1b18;
   --bg-secondary: #151412;
+  --bg-primary: #1d1b18;
   --bg-tertiary: #262320;
-  --text-primary: #f0eee8;
-  --text-secondary: #b8b1a8;
-  --text-tertiary: #8d867e;
-  --border-color: #3c3833;
-  --primary-color: #8f8981;
-  --primary-hover: #a29b92;
-  --shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  --bg-hover: #2e2a26;
+  --text-primary: #f6f4f1;
+  --text-secondary: #c9c3bb;
+  --text-tertiary: #9c958d;
+  --text-quaternary: #6f6962;
+  --border-color: #3a3530;
+  --border-hover: #5a544d;
+  --primary-hover: #9a948e;
+  --primary-active: #a6a099;
+  --quota-medium-color: #ffd862;
+  --success-badge-bg: rgba(6, 78, 59, 0.3);
+  --success-badge-text: #6ee7b7;
+  --failure-badge-bg: rgba(198, 87, 70, 0.24);
+  --failure-badge-text: #f1b0a6;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  /* #10b981 overruns the dark surface's luminance band; step it down like the
+     panel does. */
+  --viz-success: #0fae78;
 }
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
-body { margin: 0; padding: 32px; color: var(--text-primary); background: var(--bg-secondary); font: 14px/1.45 system-ui, sans-serif; }
+body {
+  margin: 0;
+  padding: 24px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
 .quota-page { max-width: 1160px; margin: 0 auto; }
-.quota-header { margin-bottom: 24px; }
-.quota-title { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.2; }
-.quota-description { margin: 8px 0 0; color: var(--text-secondary); }
+.quota-header { margin-bottom: 20px; }
+.quota-title { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -0.01em; }
+.quota-description { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
 .quota-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
-.quota-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); box-shadow: var(--shadow); }
-.quota-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
-.credential-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; background: var(--primary-color); font-size: 12px; font-weight: 700; }
-.credential-name { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; }
-.quota-row { padding: 14px 0; border-top: 1px solid var(--border-color); }
-.quota-row-header, .quota-meta { display: flex; justify-content: space-between; gap: 12px; }
-.quota-label { font-weight: 600; text-transform: capitalize; }
-.quota-percent { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.quota-track { height: 8px; margin: 8px 0 6px; overflow: hidden; border-radius: 999px; background: var(--bg-tertiary); }
-.quota-fill { height: 100%; border-radius: inherit; background: var(--success-color); transition: width .2s ease; }
-.quota-fill.is-exceeded { background: var(--error-color); }
-.quota-meta.is-exceeded { color: var(--error-color); }
-.quota-meta { color: var(--text-secondary); font-size: 12px; }
-.quota-actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
-.quota-refresh { border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; color: var(--text-primary); background: var(--bg-tertiary); font: inherit; font-size: 12px; cursor: pointer; }
-.quota-refresh:hover { border-color: var(--primary-color); background: var(--bg-primary); }
-.quota-refresh:disabled { cursor: not-allowed; opacity: .6; }
-.quota-error { color: var(--error-color); }
-.quota-warning { color: var(--warning-color); }
-.quota-muted { color: var(--text-secondary); }
+
+/* Card — same recipe as the panel's credential/stat tiles: 14px radius, 1px
+   border, subtle lift on hover. */
+.quota-card {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 15px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+  transition: transform var(--dur-hover) var(--ease-out-strong), border-color var(--dur-hover) var(--ease-out-strong), box-shadow var(--dur-hover) var(--ease-out-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .quota-card:hover { transform: translateY(-2px); border-color: var(--border-hover); box-shadow: 0 12px 26px -14px rgb(0 0 0 / 0.16); }
+}
+.quota-card-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.quota-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.quota-credential {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Plan chips — the panel's codexPlan* pill. */
+.quota-plan { display: flex; flex-wrap: wrap; gap: 6px; }
+.quota-plan-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+}
+.quota-plan-label { color: var(--text-tertiary); font-size: 11.5px; }
+.quota-plan-value { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; }
+
+.quota-rows { display: flex; flex-direction: column; gap: 11px; }
+.quota-row { display: flex; flex-direction: column; gap: 4px; }
+.quota-row-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.quota-label { min-width: 0; overflow: hidden; color: var(--text-secondary); font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.quota-meta { color: var(--text-quaternary); font-family: var(--font-mono); font-size: 11px; }
+.quota-percent { flex-shrink: 0; color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.quota-detail { color: var(--text-quaternary); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* Meter — 6px track, fill colored by REMAINING (>=70 / >=30 / <30). */
+.quota-track { height: 6px; overflow: hidden; border-radius: var(--radius-full); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.quota-fill { height: 100%; border-radius: var(--radius-full); transition: width 360ms var(--ease-out-strong); }
+.quota-fill.is-high { background: var(--viz-success); }
+.quota-fill.is-medium { background: var(--quota-medium-color); }
+.quota-fill.is-low { background: var(--error-color); }
+.quota-row.is-exceeded .quota-label { color: var(--error-color); }
+
+.quota-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.quota-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out-strong), border-color var(--dur-hover) var(--ease-out-strong), background-color var(--dur-hover) var(--ease-out-strong), color var(--dur-hover) var(--ease-out-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .quota-refresh:hover:not(:disabled) { border-color: var(--border-hover); background: color-mix(in srgb, var(--bg-tertiary) 55%, transparent); color: var(--text-primary); }
+}
+.quota-refresh:active:not(:disabled) { transform: scale(0.97); }
+.quota-refresh:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.quota-refresh:disabled { cursor: not-allowed; opacity: 0.5; }
+.quota-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.quota-input:focus { border-color: var(--primary-color); outline: none; }
+
+.quota-error { color: var(--danger-color); font-size: 11.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.quota-notice {
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.quota-notice.is-error {
+  color: var(--failure-badge-text);
+  background: var(--failure-badge-bg);
+  border: 1px solid color-mix(in srgb, var(--error-color) 32%, transparent);
+}
+.quota-notice.is-success {
+  color: var(--success-badge-text);
+  background: var(--success-badge-bg);
+  border: 1px solid color-mix(in srgb, var(--viz-success) 35%, transparent);
+}
+.quota-muted { color: var(--text-tertiary); font-size: 11.5px; }
+.quota-updated { color: var(--text-quaternary); font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.quota-empty { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12.5px; text-align: center; padding: 20px 0; }
+
 @media (max-width: 768px) {
-  body { padding: 20px 16px; }
+  body { padding: 16px 12px; }
   .quota-grid { grid-template-columns: 1fr; }
+  .quota-row-header { flex-direction: column; align-items: flex-start; gap: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quota-card, .quota-refresh, .quota-fill { transition: none; }
+  .quota-card:hover { transform: none; }
+  .quota-refresh:active:not(:disabled) { transform: none; }
 }
 </style>
 </head>
 <body>
 <div class="quota-page">
-  <header class="quota-header"><h1 class="quota-title">CommandCode Quota</h1><p class="quota-description">Usage for each configured credential. New accounts refresh automatically.</p></header>
+  <header class="quota-header"><h1 class="quota-title">CommandCode Quota</h1><p class="quota-description">Remaining quota per credential. Works with any management panel; the key is read from the panel's stored session.</p></header>
   <main id="app"><p class="quota-muted">Loading credentials...</p></main>
 </div>
 <script>
@@ -160,22 +319,59 @@ body { margin: 0; padding: 32px; color: var(--text-primary); background: var(--b
       render(cards);
     });
   }
-  function auth() {
-    const raw = localStorage.getItem("cli-proxy-auth");
-    if (!raw) return "";
+  // ---- management-key discovery (panel-agnostic) --------------------------
+  // The page is served same-origin with the management panel, so it can reuse
+  // whatever key that panel persisted. Different panels persist differently:
+  // the official Management Center writes "enc::v1::" (salt + host + user
+  // agent), CPA-Manager-Plus writes "enc::v2::" (salt + "v2" + host), older
+  // builds wrote plain JSON, and some scope the entry under a suffixed key.
+  // All spellings are attempted, then a manually supplied key is used.
+  const manualKeySlot = "commandcode-go-cliproxyapi:management-key";
+  function decodeStorage(raw) {
+    if (!raw) return null;
     try {
       let decoded = raw;
-      if (raw.startsWith("enc::v1::")) {
+      if (raw.startsWith("enc::v2::")) {
+        const bytes = Uint8Array.from(atob(raw.slice(9)), char => char.charCodeAt(0));
+        const seed = new TextEncoder().encode("cli-proxy-api-webui::secure-storage|v2|" + location.host);
+        for (let i = 0; i < bytes.length; i++) bytes[i] ^= seed[i % seed.length];
+        decoded = new TextDecoder().decode(bytes);
+      } else if (raw.startsWith("enc::v1::")) {
         const bytes = Uint8Array.from(atob(raw.slice(9)), char => char.charCodeAt(0));
         const seed = new TextEncoder().encode("cli-proxy-api-webui::secure-storage|" + location.host + "|" + navigator.userAgent);
         for (let i = 0; i < bytes.length; i++) bytes[i] ^= seed[i % seed.length];
         decoded = new TextDecoder().decode(bytes);
       }
-      const parsed = JSON.parse(decoded);
-      if (parsed && parsed.state && parsed.state.managementKey) return typeof parsed.state.managementKey === "string" ? parsed.state.managementKey : "";
-      return "";
-    } catch (_) { return ""; }
+      return JSON.parse(decoded);
+    } catch (_) { return null; }
   }
+  function keyFromState(value) {
+    if (!value || typeof value !== "object") return "";
+    const state = value.state && typeof value.state === "object" ? value.state : value;
+    const key = state.managementKey;
+    return typeof key === "string" ? key.trim() : "";
+  }
+  function storedKey() {
+    try {
+      // Enumerate rather than hard-code one key: scoped panels suffix the
+      // entry (e.g. "cli-proxy-auth:selection:<id>"), and the first entry that
+      // decodes to a key wins.
+      for (let i = 0; i < localStorage.length; i++) {
+        const name = localStorage.key(i);
+        if (!name || name.indexOf("cli-proxy-auth") !== 0) continue;
+        const key = keyFromState(decodeStorage(localStorage.getItem(name)));
+        if (key) return key;
+      }
+    } catch (_) {}
+    return "";
+  }
+  function manualKey() {
+    try { return String(sessionStorage.getItem(manualKeySlot) || "").trim(); } catch (_) { return ""; }
+  }
+  function saveManualKey(value) {
+    try { sessionStorage.setItem(manualKeySlot, value); } catch (_) {}
+  }
+  function auth() { return storedKey() || manualKey(); }
   function request(body) {
     const headers = {"Content-Type": "application/json"};
     const key = auth();
@@ -187,16 +383,40 @@ body { margin: 0; padding: 32px; color: var(--text-primary); background: var(--b
     });
   }
   function text(parent, value) { const node = document.createElement("span"); node.textContent = value == null || value === "" ? "-" : value; parent.appendChild(node); }
+
+  // A meter is shown as REMAINING, matching the panel: >=70 success,
+  // >=30 amber, <30 failure. Windows with no denominator report "unlimited"
+  // and render an empty track rather than a fabricated 0%.
+  function remainingPercent(usage) {
+    if (!usage || usage.status === "unlimited" || !(Number(usage.cap) > 0)) return null;
+    const percent = Math.max(0, Math.min(100, 100 - (Number(usage.percent) || 0)));
+    return Math.round(percent * 100) / 100;
+  }
+  function fillClass(remaining) {
+    if (remaining === null) return "quota-fill";
+    if (remaining >= 70) return "quota-fill is-high";
+    if (remaining >= 30) return "quota-fill is-medium";
+    return "quota-fill is-low";
+  }
   function renderUsage(row, usage, extraParts, withDaysLeft) {
-    const value = document.createElement("div"); value.className = "quota-percent";
+    const remaining = remainingPercent(usage);
+    const header = row.querySelector(".quota-row-header") || row;
+    const percent = document.createElement("span"); percent.className = "quota-percent";
+    percent.textContent = remaining === null ? "unlimited" : remaining + "%";
+    header.appendChild(percent);
     const track = document.createElement("div"); track.className = "quota-track";
-    const fill = document.createElement("div"); fill.className = usage.status === "exceeded" ? "quota-fill is-exceeded" : "quota-fill";
-    const percent = Math.max(0, Math.min(100, Number(usage.percent) || 0));
-    fill.style.width = percent + "%";
-    track.setAttribute("role", "progressbar"); track.setAttribute("aria-valuemin", "0"); track.setAttribute("aria-valuemax", "100"); track.setAttribute("aria-valuenow", String(percent)); track.setAttribute("aria-label", "Quota used"); track.appendChild(fill);
-    value.textContent = percent + "%";
-    const meta = document.createElement("div"); meta.className = usage.status === "exceeded" ? "quota-meta is-exceeded" : "quota-meta";
-    const parts = [usage.status || "ok"];
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    track.setAttribute("aria-valuenow", String(remaining === null ? 0 : remaining));
+    track.setAttribute("aria-label", "Quota remaining");
+    const fill = document.createElement("div"); fill.className = fillClass(remaining);
+    if (remaining !== null) fill.style.width = remaining + "%";
+    track.appendChild(fill);
+    row.appendChild(track);
+    // Detail (used/cap, reset, days left) gets its own wrapping line so a long
+    // reset string can never squeeze the row label or overflow the card.
+    const parts = [];
     if (Number(usage.cap) > 0) parts.push((Number(usage.used) || 0).toFixed(2) + " / " + Number(usage.cap).toFixed(2) + " credits");
     (extraParts || []).forEach(part => parts.push(part));
     if (usage.resets_at) {
@@ -207,26 +427,42 @@ body { margin: 0; padding: 32px; color: var(--text-primary); background: var(--b
         parts.push(days === 1 ? "1 day left" : days + " days left");
       }
     }
-    text(meta, parts.join(" · "));
-    row.append(value, track, meta);
+    if (parts.length) { const detail = document.createElement("div"); detail.className = "quota-detail"; detail.textContent = parts.join(" · "); row.appendChild(detail); }
+  }
+  function planBadge(cached) {
+    const plan = cached && cached.plan ? String(cached.plan) : "";
+    if (!plan) return "CC";
+    return plan.length <= 4 ? plan.toUpperCase() : plan.slice(0, 4).toUpperCase();
   }
   function render(cards) {
     app.textContent = "";
-    if (!cards.length) { const p = document.createElement("p"); p.className = "quota-muted"; p.setAttribute("role", "status"); p.textContent = "No configured credentials."; app.appendChild(p); return; }
+    if (!cards.length) { const p = document.createElement("p"); p.className = "quota-empty"; p.setAttribute("role", "status"); p.textContent = "No configured credentials."; app.appendChild(p); return; }
     const grid = document.createElement("div"); grid.className = "quota-grid";
     cards.forEach(card => {
       const section = document.createElement("section"); section.className = "quota-card";
-      const header = document.createElement("div"); header.className = "quota-card-header";
       const cached = values.get(card.key_id);
-      const badge = document.createElement("span"); badge.className = "credential-badge"; badge.textContent = (cached && cached.plan) || "CC"; badge.setAttribute("aria-hidden", "true");
-      const title = document.createElement("h2"); title.className = "credential-name"; title.textContent = labels.get(card.key_id) || card.label; header.append(badge, title); section.appendChild(header);
+
+      const header = document.createElement("div"); header.className = "quota-card-head";
+      const badge = document.createElement("span"); badge.className = "quota-badge"; badge.textContent = planBadge(cached); badge.setAttribute("aria-hidden", "true");
+      const title = document.createElement("h2"); title.className = "quota-credential"; title.textContent = labels.get(card.key_id) || card.label; title.title = title.textContent;
+      header.append(badge, title); section.appendChild(header);
+
+      if (cached && cached.plan) {
+        const plan = document.createElement("div"); plan.className = "quota-plan";
+        const item = document.createElement("span"); item.className = "quota-plan-item";
+        const label = document.createElement("span"); label.className = "quota-plan-label"; label.textContent = "Plan";
+        const valueSpan = document.createElement("span"); valueSpan.className = "quota-plan-value"; valueSpan.textContent = cached.plan;
+        item.append(label, valueSpan); plan.appendChild(item); section.appendChild(plan);
+      }
+
+      const rows = document.createElement("div"); rows.className = "quota-rows";
       [["five_hour", "5-hour window"], ["weekly", "Weekly window"]].forEach(entry => {
         const name = entry[0];
         const row = document.createElement("div"); row.className = "quota-row";
         const rowHeader = document.createElement("div"); rowHeader.className = "quota-row-header"; const label = document.createElement("span"); label.className = "quota-label"; label.textContent = entry[1]; rowHeader.appendChild(label); row.appendChild(rowHeader);
         const usage = values.get(card.key_id) && values.get(card.key_id)[name];
         if (usage) renderUsage(row, usage, null, name === "weekly"); else { const pending = document.createElement("div"); pending.className = "quota-meta"; pending.textContent = "Not refreshed"; row.appendChild(pending); }
-        section.appendChild(row);
+        rows.appendChild(row);
       });
       if (cached) {
         const row = document.createElement("div"); row.className = "quota-row";
@@ -234,34 +470,70 @@ body { margin: 0; padding: 32px; color: var(--text-primary); background: var(--b
         const left = Number(cached.credits_left) || 0;
         const month = cached.month;
         if (month) { renderUsage(row, month, [left.toFixed(2) + " credits left"], true); } else { const meta = document.createElement("div"); meta.className = "quota-meta"; text(meta, left.toFixed(2) + " credits left (plan unknown)"); row.appendChild(meta); }
-        section.appendChild(row);
+        rows.appendChild(row);
       }
+      section.appendChild(rows);
+
       const updated = fetchedAt.get(card.key_id);
-      if (updated) { const timestamp = document.createElement("div"); timestamp.className = "quota-meta"; timestamp.textContent = "Updated " + new Date(updated).toLocaleString(); section.appendChild(timestamp); }
+      if (updated) { const timestamp = document.createElement("div"); timestamp.className = "quota-updated"; timestamp.textContent = "Updated " + new Date(updated).toLocaleString(); section.appendChild(timestamp); }
+
       const actions = document.createElement("div"); actions.className = "quota-actions";
       const button = document.createElement("button"); button.className = "quota-refresh"; button.textContent = inFlight.has(card.key_id) ? "Refreshing..." : "Refresh"; button.disabled = inFlight.has(card.key_id); button.setAttribute("aria-label", "Refresh " + card.label);
       const error = document.createElement("span"); error.className = "quota-error"; error.setAttribute("role", "status"); error.textContent = errors.get(card.key_id) || "";
       button.onclick = () => { refreshCard(card, cards); };
-      actions.append(button, error); section.appendChild(actions); grid.appendChild(section);
+      actions.append(error, button); section.appendChild(actions);
+      grid.appendChild(section);
     });
     app.appendChild(grid);
   }
-  if (!auth()) { app.textContent = ""; const p = document.createElement("p"); p.className = "quota-error"; p.setAttribute("role", "status"); p.textContent = "Enable Remember password in Management Center to use this page."; app.appendChild(p); return; }
-  request({}).then(result => {
-    const cards = result.cards || [];
-    const configured = new Set(cards.map(card => card.key_id));
-    Object.keys(cache).forEach(keyID => {
-      if (!configured.has(keyID)) { delete cache[keyID]; values.delete(keyID); labels.delete(keyID); fetchedAt.delete(keyID); }
+  // No key could be recovered from the panel's storage (a third-party panel
+  // that keeps it in memory, or a panel on another origin). Ask for it once
+  // instead of dead-ending: the value is held for this tab only.
+  function renderKeyPrompt(message) {
+    app.textContent = "";
+    const box = document.createElement("div"); box.className = "quota-card";
+    const title = document.createElement("h2"); title.className = "quota-credential"; title.textContent = "Management key required"; box.appendChild(title);
+    const note = document.createElement("p"); note.className = "quota-muted"; note.textContent = message || "The panel's stored management key could not be read. Enter it to load quota; it is kept for this tab only."; box.appendChild(note);
+    const form = document.createElement("form"); form.className = "quota-actions";
+    const input = document.createElement("input"); input.type = "password"; input.className = "quota-input"; input.setAttribute("aria-label", "Management key"); input.autocomplete = "off";
+    const submit = document.createElement("input"); submit.type = "submit"; submit.className = "quota-refresh"; submit.value = "Use key";
+    const error = document.createElement("span"); error.className = "quota-error"; error.setAttribute("role", "status");
+    form.append(input, submit);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const value = input.value.trim();
+      if (!value) { error.textContent = "Enter the management key."; return; }
+      saveManualKey(value);
+      error.textContent = "";
+      load();
     });
-    cards.forEach(card => {
-      if (card.email && !labels.has(card.key_id)) labels.set(card.key_id, card.label);
+    box.append(form, error);
+    app.appendChild(box);
+    input.focus();
+  }
+  function load() {
+    request({}).then(result => {
+      const cards = result.cards || [];
+      const configured = new Set(cards.map(card => card.key_id));
+      Object.keys(cache).forEach(keyID => {
+        if (!configured.has(keyID)) { delete cache[keyID]; values.delete(keyID); labels.delete(keyID); fetchedAt.delete(keyID); }
+      });
+      cards.forEach(card => {
+        if (card.email && !labels.has(card.key_id)) labels.set(card.key_id, card.label);
+      });
+      saveCache();
+      const missing = cards.filter(card => !card.email);
+      missing.forEach(card => inFlight.add(card.key_id));
+      render(cards);
+      missing.forEach(card => refreshCard(card, cards, true));
+    }).catch(err => {
+      const message = err.message || "Unable to load credentials.";
+      if (/auth|key|forbidden|unauthor/i.test(message)) { renderKeyPrompt(message); return; }
+      app.textContent = ""; const p = document.createElement("p"); p.className = "quota-notice is-error"; p.setAttribute("role", "status"); p.textContent = message; app.appendChild(p);
     });
-    saveCache();
-    const missing = cards.filter(card => !card.email);
-    missing.forEach(card => inFlight.add(card.key_id));
-    render(cards);
-    missing.forEach(card => refreshCard(card, cards, true));
-  }).catch(err => { app.textContent = ""; const p = document.createElement("p"); p.className = "quota-error"; p.setAttribute("role", "status"); p.textContent = err.message || "Unable to load credentials."; app.appendChild(p); });
+  }
+  if (!auth()) { renderKeyPrompt(""); return; }
+  load();
 })();
 </script>
 </body>

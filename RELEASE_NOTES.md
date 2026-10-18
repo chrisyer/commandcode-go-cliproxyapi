@@ -1,5 +1,33 @@
 # Release Notes
 
+## v0.2.0 — Native per-credential quota
+
+CommandCode credentials now report quota the way codex/antigravity credentials
+do, with no plugin page and no panel extension.
+
+**Added**
+
+- **Quota provider capability**: the plugin advertises `quota_provider`, so the
+  panel renders each CommandCode credential's plan and remaining quota inside
+  its own credential list, refreshed from the credential row, next to the
+  built-in codex/antigravity entries. The normalized response reports remaining
+  fractions (`1.0` = untouched) plus the raw remaining and purchased credit
+  counts.
+- **Panel-agnostic quota page**: the standalone `CommandCode Quota` page now
+  recovers the management key from whichever panel hosts it — `enc::v1::` (the
+  official Management Center), `enc::v2::` (CPA-Manager-Plus), scoped
+  `cli-proxy-auth*` entries, or plain JSON — and, when none is readable, asks
+  for the key once and keeps it for the tab instead of dead-ending on a
+  Management Center-only message.
+
+**Upgrade notes**
+
+- Replace the plugin binary and restart CLIProxyAPI.
+- **Minimum host is now CLIProxyAPI `v7.2.159`** (any `v8.x` works): the plugin
+  builds against the v8 plugin SDK and reports `schema_version 6`, which hosts
+  below `v7.2.159` reject. Schema 6 is also what makes the host stop
+  HTML-escaping plugin management JSON, so the quota values arrive intact.
+
 ## v0.1.1 — Accept array function_call_output results
 
 Responses `function_call_output.output` may be a string or an array of text

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginabi"
-	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 
 	"commandcode-go-cliproxyapi/internal/config"
 	"commandcode-go-cliproxyapi/resources"
@@ -414,8 +414,37 @@ func TestQuotaUnknownKeyAndResource(t *testing.T) {
 }
 
 func TestQuotaPageReadsRememberedManagementKey(t *testing.T) {
-	if !strings.Contains(resources.QuotaPage, "parsed.state && parsed.state.managementKey") {
-		t.Fatal("quota page does not read persisted state.managementKey")
+	for _, marker := range []string{
+		"state.managementKey",
+		"keyFromState",
+		"localStorage.key(i)",
+	} {
+		if !strings.Contains(resources.QuotaPage, marker) {
+			t.Fatalf("quota page does not read persisted state.managementKey: missing %q", marker)
+		}
+	}
+}
+
+// A third-party panel may keep the management key in memory only, or live on
+// another origin, so the page must not dead-end on a panel-specific message;
+// it recovers what it can from any panel's storage and then asks the operator.
+func TestQuotaPageIsPanelAgnostic(t *testing.T) {
+	for _, marker := range []string{
+		"enc::v1::",
+		"enc::v2::",
+		"cli-proxy-api-webui::secure-storage",
+		"secure-storage|v2|",
+		`indexOf("cli-proxy-auth") !== 0`,
+		"renderKeyPrompt",
+		"Management key required",
+		"saveManualKey",
+	} {
+		if !strings.Contains(resources.QuotaPage, marker) {
+			t.Fatalf("quota page missing panel-agnostic marker %q", marker)
+		}
+	}
+	if strings.Contains(resources.QuotaPage, "Enable Remember password") {
+		t.Fatal("quota page still dead-ends with the Management Center-only message")
 	}
 }
 
@@ -468,8 +497,8 @@ func TestQuotaPageIsStaticAndSecretFree(t *testing.T) {
 	if resources.QuotaPage == "" || strings.Contains(resources.QuotaPage, testKey) || strings.Contains(resources.QuotaPage, "setInterval") || strings.Contains(resources.QuotaPage, "reset button") {
 		t.Fatal("quota page contains a secret, polling, or reset action")
 	}
-	if !strings.Contains(resources.QuotaPage, "textContent") || !strings.Contains(resources.QuotaPage, "Remember password") {
-		t.Fatal("quota page missing safe rendering or login guidance")
+	if !strings.Contains(resources.QuotaPage, "textContent") || !strings.Contains(resources.QuotaPage, "Management key required") {
+		t.Fatal("quota page missing safe rendering or key guidance")
 	}
 }
 
@@ -512,6 +541,10 @@ func TestQuotaPageUsesManualSessionCache(t *testing.T) {
 	}
 }
 
+// The page must read as part of the panel, so it carries the panel's own
+// design tokens and its quota-meter contract: a 6px track whose fill is
+// coloured by REMAINING quota (>=70 success / >=30 amber / <30 failure), the
+// same three-band rule the panel's QuotaMeter uses.
 func TestQuotaPageUsesNativeQuotaStylesAndThemeBridge(t *testing.T) {
 	for _, marker := range []string{
 		"quota-page",
@@ -519,9 +552,18 @@ func TestQuotaPageUsesNativeQuotaStylesAndThemeBridge(t *testing.T) {
 		"quota-card",
 		"quota-track",
 		"quota-fill",
-		".quota-fill.is-exceeded { background: var(--error-color); }",
-		`fill.className = usage.status === "exceeded" ? "quota-fill is-exceeded" : "quota-fill"`,
-		`meta.className = usage.status === "exceeded" ? "quota-meta is-exceeded" : "quota-meta"`,
+		// Three-band meter keyed on remaining, matching QuotaMeter.tsx.
+		".quota-fill.is-high { background: var(--viz-success); }",
+		".quota-fill.is-medium { background: var(--quota-medium-color); }",
+		".quota-fill.is-low { background: var(--error-color); }",
+		"function remainingPercent(usage) {",
+		`if (remaining === null) return "quota-fill";`,
+		`if (remaining >= 70) return "quota-fill is-high";`,
+		`if (remaining >= 30) return "quota-fill is-medium";`,
+		`return "quota-fill is-low";`,
+		`percent.textContent = remaining === null ? "unlimited" : remaining + "%"`,
+		".quota-track { height: 6px;",
+		"background: color-mix(in srgb, var(--text-primary) 8%, transparent);",
 		// The monthly allowance must stay metered like the two rate-limit
 		// windows instead of degrading back to a bare text row.
 		`label.textContent = "Monthly credits"`,
@@ -552,7 +594,13 @@ func TestQuotaPageUsesNativeQuotaStylesAndThemeBridge(t *testing.T) {
 		"--border-color: #e3e1db",
 		"--primary-color: #8b8680",
 		"--primary-hover: #7f7a74",
-		"border-radius: 8px; padding: 8px 10px",
+		// CPA-matched chrome: quiet bordered action pill, plan chips, and the
+		// panel's own duration/easing vocabulary.
+		".quota-refresh",
+		"border-radius: var(--radius-full);",
+		".quota-plan-item",
+		".quota-badge",
+		"--ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);",
 		`MutationObserver`,
 		`catch (_) {}`,
 	} {
@@ -580,4 +628,42 @@ func TestQuotaPageUsesNativeQuotaStylesAndThemeBridge(t *testing.T) {
 func mustHashPrefix(key string) string {
 	_, label := quotaIdentity(key)
 	return strings.TrimPrefix(label, "CommandCode credential ")
+}
+
+// The page deliberately mirrors the Management Center's design tokens
+// (src/styles/themes.scss) so it does not look like an embedded stranger. The
+// band colours in particular must come from the panel's palette, not be
+// invented: success #10b981, amber #e0aa14 (light) / #ffd862 (dark),
+// failure #c65746.
+func TestQuotaPageMatchesManagementCenterTokens(t *testing.T) {
+	for _, marker := range []string{
+		"--viz-success: #10b981;",
+		"--quota-medium-color: #e0aa14;",
+		"--error-color: #c65746;",
+		"--viz-success: #0fae78;",        // dark-mode step-down, as the panel does
+		"--quota-medium-color: #ffd862;", // dark-mode amber
+		"--bg-secondary: #faf9f5;",
+		"--bg-primary: #f0eee8;",
+		"--text-primary: #2d2a26;",
+		"--primary-color: #8b8680;",
+		"border-radius: 14px;", // panel card radius
+	} {
+		if !strings.Contains(resources.QuotaPage, marker) {
+			t.Fatalf("quota page diverged from Management Center tokens: missing %q", marker)
+		}
+	}
+}
+
+// The meter is a REMAINING reading, like the panel's: a fresh account is 100%,
+// not 0%. Rendering the used value here would invert the bar's meaning.
+func TestQuotaPageMeterShowsRemaining(t *testing.T) {
+	for _, marker := range []string{
+		`Math.max(0, Math.min(100, 100 - (Number(usage.percent) || 0)))`,
+		`if (!usage || usage.status === "unlimited" || !(Number(usage.cap) > 0)) return null;`,
+		`track.setAttribute("aria-label", "Quota remaining");`,
+	} {
+		if !strings.Contains(resources.QuotaPage, marker) {
+			t.Fatalf("quota meter is not a remaining reading: missing %q", marker)
+		}
+	}
 }

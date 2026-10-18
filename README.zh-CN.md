@@ -48,12 +48,13 @@ CommandCode Go/GOAT/Pro/Max 通过它的 OpenAI 兼容入口访问：
   - OpenAI 客户端：每个 chunk 回填 `reasoning_content`，厂商原始字段保持不变。
 - **能力感知的思考控制**：`route-overrides` 或模型目录里的 thinking 元数据一旦声明能力，就恢复严格校验与预算夹取；没有任何声明时，客户端的 `reasoning_effort` 原样转发（`auto`/`none` 省略该字段），以上游为准。
 - **动态目录发现**：远程目录 + 本地兜底、去重，并对被排除的模型给出诊断。
-- **CommandCode 配额页面**：管理后台单独一页，列出每个凭据对应的账号邮箱、套餐、剩余套餐额度和滚动 5 小时/每周窗口（已用、上限、重置时间），每张卡片按需独立刷新。
+- **原生凭证额度**：插件会注册 quota provider，每个 CommandCode 凭证的套餐与 5 小时/每周/每月剩余额度直接显示在面板自己的凭证列表里——不需要插件页面，也不需要面板扩展，和内置的 codex/antigravity 凭证一样。
+- **CommandCode 配额页面**：管理后台单独一页，列出每个凭据对应的账号邮箱、套餐、剩余套餐额度和滚动 5 小时/每周窗口（已用、上限、重置时间），每张卡片按需独立刷新。页面会从承载它的面板读取管理密钥，读不到时再一次性询问。
 - **多密钥调度**：一份 key 池通过 CLIProxyAPI 原生调度器跨所有协议共享。
 
 ## 环境要求
 
-- **CLIProxyAPI**：`v7.2.138+`
+- **CLIProxyAPI**：`v7.2.159+`（或任意 `v8.x`）
 - **Go**：1.26+（`-buildmode=c-shared` 需要启用 CGO）
 
 ## 构建
@@ -135,9 +136,9 @@ plugins:
 | `max-response-bytes` | `int64` | `67108864` | 非流式响应体上限。 |
 | `allow-http` | `bool` | `false` | 允许 `http://` 上游，仅供本地测试。 |
 
-### 配额页面
+### 配额
 
-管理后台 → 插件 里的 `CommandCode Quota` 页面读取与 `base-url` 同源的账号接口：
+账号接口与 `base-url` 同源：
 
 | 接口 | 用途 |
 |---|---|
@@ -145,7 +146,11 @@ plugins:
 | `GET {authority}/alpha/billing/subscriptions` | 套餐 id/状态 |
 | `GET {authority}/alpha/whoami?limits=1` | 卡片标题用的账号邮箱 |
 
-`{authority}` 由 `base-url` 去掉 provider 路径（`/provider/v1`）得到。每张卡片手动独立刷新，页面从不轮询，配额数值也不参与路由决策。
+`{authority}` 由 `base-url` 去掉 provider 路径（`/provider/v1`）得到。
+
+**原生按凭证展示额度（推荐）**。插件会声明 `quota_provider` 能力：面板直接在凭证列表里显示每个 CommandCode 凭证的套餐与剩余额度，和内置的 codex/antigravity 一样，从凭证行刷新。无需额外配置——安装插件后 `POST /v0/management/plugins/commandcode-go-cliproxyapi/quota` 按 `auth_index` 返回结果。归一化响应给出的是**剩余比例**（`1.0` 表示未消耗），原始剩余/赠送额度作为 summary 指标一并返回。
+
+**独立配额页面**。没有插件额度视图的面板仍可使用 管理后台 → 插件 → `CommandCode Quota`。该页面不绑定特定面板：会从持有管理密钥的面板本地存储中读取（官方管理端是 `enc::v1::`，CPA-Manager-Plus 是 `enc::v2::`，带 scope 后缀的 `cli-proxy-auth*` 条目，或明文 JSON）；若都读不到——比如面板只把密钥放在内存里，或面板在另一个源——页面会一次性向操作者索要密钥并在本标签页内记住。无论哪种方式，每张卡片都是手动独立刷新，页面从不轮询，配额数值也不参与路由决策。
 
 ### reasoning effort（思考强度）
 

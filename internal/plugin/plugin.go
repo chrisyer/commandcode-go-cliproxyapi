@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginabi"
-	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 
 	"commandcode-go-cliproxyapi/internal/catalog"
 	"commandcode-go-cliproxyapi/internal/config"
@@ -24,7 +24,7 @@ const ProviderID = "commandcode"
 // pluginName / pluginVersion are reported in registration metadata.
 const (
 	pluginName    = "commandcode-go-cliproxyapi"
-	pluginVersion = "0.1.1"
+	pluginVersion = "0.2.0"
 )
 
 // githubRepoURL satisfies the host's validPlugin gate (host.go
@@ -131,6 +131,11 @@ func (m *Manager) HandleCall(method string, request []byte) (resp []byte, err er
 		return m.registerManagement(request)
 	case pluginabi.MethodManagementHandle:
 		return m.handleManagement(request)
+	case methodQuotaIdentifier, methodQuotaDescribe, methodQuotaFetch, methodQuotaReset:
+		// Quota-provider surface (CLIProxyAPI v7.2.159+/v8): lets a host panel
+		// render this credential's quota natively, the way codex/antigravity
+		// credentials are rendered, without any plugin page or panel extension.
+		return m.handleQuota(method, request)
 	case pluginabi.MethodExecutorIdentifier:
 		return okEnvelope(map[string]string{"identifier": ProviderID}), nil
 	case pluginabi.MethodExecutorCountTokens:
@@ -163,6 +168,11 @@ type capabilities struct {
 	ExecutorInputFormats  []string                     `json:"executor_input_formats,omitempty"`
 	ExecutorOutputFormats []string                     `json:"executor_output_formats,omitempty"`
 	ManagementAPI         bool                         `json:"management_api"`
+	// QuotaProvider advertises the quota.identifier/describe/fetch/reset
+	// surface. The host ignores unknown capability keys, so this is inert on
+	// hosts predating the capability (CLIProxyAPI < v7.2.159) and enables the
+	// native per-credential quota view on hosts that have it.
+	QuotaProvider bool `json:"quota_provider"`
 }
 
 type registrationResult struct {
@@ -190,6 +200,7 @@ func registrationEnvelope() []byte {
 			ExecutorInputFormats:  formats,
 			ExecutorOutputFormats: formats,
 			ManagementAPI:         true,
+			QuotaProvider:         true,
 		},
 	})
 }

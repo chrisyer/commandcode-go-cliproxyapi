@@ -4,3 +4,4 @@ plugins/
 *.dylib
 *.dll
 *.h
+.DS_Store
